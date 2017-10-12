@@ -14,6 +14,14 @@ DG_EXEC = ${DG} --max-passes 25 --spec specs/common.yml --multispec specs/multis
 DISTRO_ID = $(shell ${DG_EXEC} --template "{{ config.os.id }}")
 TAG = ${DISTRO_ID}/awesome:${VERSION}
 
+
+non_default_dependencies:
+	dnf install -q -y /usr/bin/go-md2man /usr/bin/dg /usr/bin/s2i
+
+non_default_testdependencies:
+	dnf copr enable phracek/meta-test-family-devel
+	dnf install -q -y python2-tests python3-tests meta-test-family  ...
+
 dg:
 	${DG_EXEC} --template $(DOCKERFILE_SRC) --output $(DOCKERFILE)
 	${DG_EXEC} --template help/help.md --output help/help.md.rendered
@@ -22,14 +30,14 @@ doc: dg
 	mkdir -p ./root/
 	${GOMD2MAN} -in=help/help.md.rendered -out=./root/help.1
 
-build: doc dg
+build: non_default_dependencies doc dg
 	docker build --tag=${TAG} -f $(DOCKERFILE) .
 
 run: build
 	docker run -p 9000:9000 -d ${TAG}
 
-test: build
-	cd tests; VERSION=${VERSION} DISTRO=${DISTRO} DOCKERFILE="../$(DOCKERFILE)" MODULE=docker URL="docker=${TAG}" mtf -l *.py --xunit -
+test: build non_default_testdependencies MODULE=docker URL="docker=${TAG}" DOCKERFILE="../$(DOCKERFILE)" VERSION=${VERSION} DISTRO=${DISTRO}
+	cd tests; mtf -l *.py
 
 test-in-container: test-image
 	docker run --rm -ti -v /var/run/docker.sock:/var/run/docker.sock:Z -v ${PWD}:/src ${TEST_IMAGE_NAME} "SELECTORS=${SELECTORS}"
